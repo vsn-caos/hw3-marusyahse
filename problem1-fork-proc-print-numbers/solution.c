@@ -15,7 +15,6 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Для N=1 просто выводим "1\n"
     if (n == 1) {
         printf("1\n");
         return 0;
@@ -29,20 +28,27 @@ int main(int argc, char *argv[]) {
         }
         if (pid == 0) {
             // Дочерний процесс
-            if (i + 1 == n) {
-                // Последний процесс выводит число и перевод строки
-                printf("%d\n", i + 1);
+            printf("%d", i + 1);
+            if (i + 1 < n) {
+                printf(" ");
             } else {
-                // Остальные процессы выводят число и пробел
-                printf("%d ", i + 1);
+                printf("\n");
             }
+            fflush(stdout);
             return 0;
         } else {
             // Родительский процесс
-            printf("%d ", i);
+            printf("%d", i);
+            if (i < n) {
+                printf(" ");
+            }
             fflush(stdout);
             wait(NULL);
-            return 0;
+            // Не завершаемся сразу, а продолжаем цикл
+            // Но только для первого процесса
+            if (i > 1) {
+                return 0;
+            }
         }
     }
     
