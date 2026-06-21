@@ -35,22 +35,39 @@ int main(int argc, char *argv[]) {
 
     char buffer[1024];
     int num;
+    int count = 0;
+    
+    // Читаем все числа из stdin и отправляем
     while (scanf("%d", &num) == 1) {
         snprintf(buffer, sizeof(buffer), "%d\n", num);
         if (send(sock, buffer, strlen(buffer), 0) == -1) {
             perror("send");
-            break;
+            close(sock);
+            return 1;
+        }
+        count++;
+    }
+
+    // Закрываем отправку
+    shutdown(sock, SHUT_WR);
+
+    // Читаем ответ
+    ssize_t bytes;
+    char response[4096] = {0};
+    int total_bytes = 0;
+    
+    while ((bytes = recv(sock, buffer, sizeof(buffer) - 1, 0)) > 0) {
+        buffer[bytes] = '\0';
+        // Проверяем, не закончились ли данные
+        if (total_bytes + bytes < sizeof(response) - 1) {
+            strcat(response, buffer);
+            total_bytes += bytes;
         }
     }
 
-    shutdown(sock, SHUT_WR);
-
-    ssize_t bytes;
-    while ((bytes = recv(sock, buffer, sizeof(buffer) - 1, 0)) > 0) {
-        buffer[bytes] = '\0';
-        printf("%s", buffer);
-    }
-
+    // Выводим полученные числа
+    printf("%s", response);
+    
     close(sock);
     return 0;
 }
