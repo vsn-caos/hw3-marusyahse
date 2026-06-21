@@ -2,32 +2,55 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-
-// Программе передаются два аргумента:
-//   argv[1] — IPv4-адрес сервера в десятичной записи (например, "127.0.0.1")
-//   argv[2] — номер порта
-//
-// Программа должна:
-//   1. Установить TCP-соединение с указанным сервером.
-//   2. В цикле читать со stdin целые знаковые числа в текстовом формате.
-//   3. Отправлять каждое число на сервер в бинарном виде (int32, Little Endian).
-//   4. Получать от сервера int32 LE в ответ и выводить его в stdout в текстовом виде.
-//   5. Если сервер закрыл соединение — завершиться с кодом возврата 0.
+#include <arpa/inet.h>
 
 int main(int argc, char *argv[]) {
     if (argc != 3) {
-        fprintf(stderr, "Usage: %s <ipv4_addr> <port>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <IP> <port>\n", argv[0]);
         return 1;
     }
 
-    // TODO: создайте TCP-сокет (AF_INET, SOCK_STREAM),
-    //       заполните struct sockaddr_in с помощью inet_aton/inet_pton,
-    //       подключитесь через connect,
-    //       реализуйте цикл чтения/отправки/приёма/вывода чисел.
-    //       Порядок байт — Little Endian (на x86/x86_64 это нативный порядок).
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock == -1) {
+        perror("socket");
+        return 1;
+    }
 
+    struct sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(atoi(argv[2]));
+    if (inet_pton(AF_INET, argv[1], &addr.sin_addr) <= 0) {
+        perror("inet_pton");
+        close(sock);
+        return 1;
+    }
+
+    if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
+        perror("connect");
+        close(sock);
+        return 1;
+    }
+
+    char buffer[1024];
+    int num;
+    while (scanf("%d", &num) == 1) {
+        snprintf(buffer, sizeof(buffer), "%d\n", num);
+        if (send(sock, buffer, strlen(buffer), 0) == -1) {
+            perror("send");
+            break;
+        }
+    }
+
+    shutdown(sock, SHUT_WR);
+
+    ssize_t bytes;
+    while ((bytes = recv(sock, buffer, sizeof(buffer) - 1, 0)) > 0) {
+        buffer[bytes] = '\0';
+        printf("%s", buffer);
+    }
+
+    close(sock);
     return 0;
 }
