@@ -2,72 +2,94 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <arpa/inet.h>
+
+ssize_t send_all(int sockfd, const uint8_t *buf, size_t len) {
+    size_t total = 0;
+    while (total < len) {
+        ssize_t sent = send(sockfd, buf + total, len - total, 0);
+        if (sent <= 0) {
+            return sent;
+        }
+        total += sent;
+    }
+    return total;
+}
+
+ssize_t recv_all(int sockfd, uint8_t *buf, size_t len) {
+    size_t total = 0;
+    while (total < len) {
+        ssize_t received = recv(sockfd, buf + total, len - total, 0);
+        if (received <= 0) {
+            return received;
+        }
+        total += received;
+    }
+    return total;
+}
 
 int main(int argc, char *argv[]) {
     if (argc != 3) {
-        fprintf(stderr, "Usage: %s <IP> <port>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <ipv4_addr> <port>\n", argv[0]);
         return 1;
     }
 
+    const char *ip_str = argv[1];
+    int port = atoi(argv[2]);
+
     int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock == -1) {
+    if (sock < 0) {
         perror("socket");
         return 1;
     }
 
-    struct sockaddr_in addr;
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(atoi(argv[2]));
-    if (inet_pton(AF_INET, argv[1], &addr.sin_addr) <= 0) {
+    struct sockaddr_in server_addr;
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(port);
+    
+    if (inet_pton(AF_INET, ip_str, &server_addr.sin_addr) <= 0) {
         perror("inet_pton");
         close(sock);
         return 1;
     }
 
-    if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
+    if (connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
         perror("connect");
         close(sock);
         return 1;
     }
 
-    char buffer[1024];
-    int num;
-    int count = 0;
-    
-    // Читаем все числа из stdin и отправляем
-    while (scanf("%d", &num) == 1) {
-        snprintf(buffer, sizeof(buffer), "%d\n", num);
-        if (send(sock, buffer, strlen(buffer), 0) == -1) {
-            perror("send");
-            close(sock);
-            return 1;
+    int32_t val;
+    while (scanf("%d", &val) == 1) {
+        uint8_t out_buf[4];
+        out_buf[0] = (val >> 0) & 0xFF;
+        out_buf[1] = (val >> 8) & 0xFF;
+        out_buf[2] = (val >> 16) & 0xFF;
+        out_buf[3] = (val >> 24) & 0xFF;
+
+        if (send_all(sock, out_buf, 4) <= 0) {
+            break;
         }
-        count++;
+
+        uint8_t in_buf[4];
+        if (recv_all(sock, in_buf, 4) <= 0) {
+            break;
+        }
+
+        int32_t res = (int32_t)(
+            ((uint32_t)in_buf[0] << 0)  |
+            ((uint32_t)in_buf[1] << 8)  |
+            ((uint32_t)in_buf[2] << 16) |
+            ((uint32_t)in_buf[3] << 24)
+        );
+
+        printf("%d\n", res);
+        fflush(stdout);
     }
 
-    // Закрываем отправку
-    shutdown(sock, SHUT_WR);
-
-    // Читаем ответ
-    ssize_t bytes;
-    char response[4096] = {0};
-    int total_bytes = 0;
-    
-    while ((bytes = recv(sock, buffer, sizeof(buffer) - 1, 0)) > 0) {
-        buffer[bytes] = '\0';
-        // Проверяем, не закончились ли данные
-        if (total_bytes + bytes < sizeof(response) - 1) {
-            strcat(response, buffer);
-            total_bytes += bytes;
-        }
-    }
-
-    // Выводим полученные числа
-    printf("%s", response);
-    
     close(sock);
     return 0;
 }
