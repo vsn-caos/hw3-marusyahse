@@ -3,15 +3,40 @@
 #include <string.h>
 #include <unistd.h>
 
-// Программе на стандартный поток ввода задается арифметическое выражение
-// в синтаксисе языка python3. Необходимо вычислить это выражение и вывести результат.
-// Использовать дополнительные процессы запрещено — нужно использовать exec.
-
 int main(void) {
-    // TODO: прочитайте выражение из stdin,
-    //       затем вызовите execvp/execlp для запуска python3,
-    //       который вычислит и выведет результат.
-    //       Подсказка: python3 -c "print(<выражение>)"
-
-    return 0;
+    char expression[1024];
+    
+    if (fgets(expression, sizeof(expression), stdin) == NULL) {
+        fprintf(stderr, "Failed to read expression\n");
+        return 1;
+    }
+    
+    size_t len = strlen(expression);
+    if (len > 0 && expression[len - 1] == '\n') {
+        expression[len - 1] = '\0';
+    }
+    
+    char *args[] = {
+        "python3",
+        "-c",
+        "print(",
+        expression,
+        ")",
+        NULL
+    };
+    
+    char command[2048];
+    snprintf(command, sizeof(command), "print(%s)", expression);
+    
+    char *exec_args[] = {
+        "python3",
+        "-c",
+        command,
+        NULL
+    };
+    
+    execvp("python3", exec_args);
+    
+    perror("execvp");
+    return 1;
 }
